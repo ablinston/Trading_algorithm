@@ -102,7 +102,7 @@ def calculate_profit_vector(data,
                                  "bet_per_pt": [0] * len(buy_prices),
                                  "balance": [initial_balance] * len(buy_prices)})
     
-    results_data["buy_sell_diff"] = results_data["sell_price"] - results_data["buy_price"]
+    results_data["buy_sell_diff"] = results_data["sell_price"] - results_data["buy_price"] - 0.15 # the spread paid
     
     # Loop through each day
     for i in range(1, (len(data.index) - 1)):
@@ -128,7 +128,7 @@ def calculate_profit_vector(data,
         results_data["size_of_bet"] = results_data["balance"].apply(lambda x: min(x * 0.8, max_exposure))
         
         # Now bet on the shares where appropriate
-        results_data["bet_per_pt"] = results_data["buy_ind"] * results_data["size_of_bet"] / results_data["buy_price"]
+        results_data["bet_per_pt"] = ~results_data["sell_ind"] * results_data["buy_ind"] * results_data["size_of_bet"] / results_data["buy_price"] # Add in opposite of sell so no buying and selling on same day
         
 
     # On the last day, sell out if necessary
