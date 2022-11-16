@@ -6,6 +6,7 @@ import random as r
 import statistics as st
 import os
 from datetime import datetime
+from itertools import product
 
 # Read in data
 
@@ -14,6 +15,8 @@ raw_prices = pd.read_csv("C:/Users/Andy/Documents/Trading_algorithm/^VIX.csv")
 # Change format of the date column
 raw_prices[["Year", "Month", "Day"]] = raw_prices["Date"].str.split("-", expand = True)
 raw_prices["Year"] = pd.to_numeric(raw_prices["Year"])
+raw_prices["Month"] = pd.to_numeric(raw_prices["Month"])
+
 raw_prices.head()
 raw_prices["Date_ft"] = raw_prices["Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
 
@@ -38,10 +41,8 @@ max_exposure = 50000
 global_end_loss = True
 global_overnight_rate = 0.065 / 365
 
-initial_buy_prices = list(range(10, 30, 5))
-initial_sell_prices = list(range(20, 80, 10))
-
-results = pd.DataFrame([[0,0,0]], columns = ["buy_price", "sell_price", "profit"])
+initial_buy_prices = list(np.linspace(10, 30, 8))
+initial_sell_prices = list(np.linspace(20, 80, 8))
 
 # len(initial_buy_prices) * len(initial_sell_prices)
 
@@ -49,28 +50,83 @@ train_data = raw_prices[raw_prices["Year"] < 2008].reset_index(drop = True)
 test_data = raw_prices[raw_prices["Year"] >= 2010].reset_index(drop = True)
 
 
-# First run through the initial prices and populate the results for the Monte Carlo runs to work with
-count = 0
-for buy_price in initial_buy_prices:
-    for sell_price in initial_sell_prices:
-        # Add values to end of the dataframe
-        if buy_price < sell_price:
-            results.loc[-1] = [buy_price,
-                               sell_price,
-                               calculate_profit(train_data, buy_price, sell_price, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)]
-            results.index += 1
-            count += 1
-            print(f"Run {count} done.")
-        
-
-# Now run the main simulation and wait for it to converge on an answer
-r.seed(1021)
-results = mcmc_profit(results, train_data, max_exposure = max_exposure, initial_balance = init_balance, min_iterations = 10, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+# Get first set of results
+results = best_trading_results(train_data,
+                              initial_buy_prices,
+                              initial_sell_prices,
+                              max_exposure = max_exposure,
+                              initial_balance = init_balance,
+                              end_loss = global_end_loss,
+                              overnight_rate = global_overnight_rate)
+    
                        
-print(results)
+print(results.loc[0])
+overall_results = results.loc[0]
 
-results2 = results
+# Try these results on random cuts of the training data
+r.seed(4234)
+
+for i in range(1,20):
+    
+    # We want at least 5 years of data
+    n_years = r.randrange(5, 15)
+    start_year = r.randrange(min(train_data["Year"]),
+                             max(train_data["Year"]) - n_years)
+    start_month = r.randrange(1, 13)
+    
+    train_data_filtered = train_data[(train_data.Year >= start_year) &
+                                     (train_data.Year <= (start_year + n_years))]
+    
+    train_data_filtered = train_data_filtered[~((train_data_filtered.Year == start_year) &
+                                              (train_data_filtered.Month < start_month))]
+    
+    train_data_filtered = train_data_filtered[~((train_data_filtered.Year == train_data_filtered.Year.max()) &
+                                              (train_data_filtered.Month > start_month))]
+    
+    train_data_filtered = train_data_filtered.reset_index(drop = True)
+    
+    # Now work out the best buy and sell
+    results_filt = best_trading_results(train_data_filtered,
+                                          initial_buy_prices,
+                                          initial_sell_prices,
+                                          max_exposure = max_exposure,
+                                          initial_balance = init_balance,
+                                          end_loss = global_end_loss,
+                                          overnight_rate = global_overnight_rate)
+    
+    print(f"Starting in {start_month}/{start_year} for {n_years} years:")
+    print(results_filt.loc[0])
+
+    del results_filt
+    del train_data_filtered
+    
 ##########################################
+
+
+# Vectorised
+initial_buy_prices = list(np.linspace(10, 50, 500))
+initial_sell_prices = list(np.linspace(20, 80, 500))
+
+results = pd.DataFrame(list(product(initial_buy_prices, initial_sell_prices)),
+                       columns = ["Buy", "Sell"])
+# Remove where buy > sell
+results = results[results.Sell > results.Buy]
+
+results["profit"] = calculate_profit_vector(train_data,
+                              results["Buy"],
+                              results["Sell"],
+                              max_exposure = max_exposure,
+                              initial_balance = init_balance,
+                              end_loss = global_end_loss,
+                              overnight_rate = global_overnight_rate)
+
+results[results.profit > 0]["Buy"].min()
+results[results.profit > 0]["Buy"].max()
+results[results.profit > 0]["Sell"].min()
+results[results.profit > 0]["Sell"].max()
+
+results = results.sort_values(by = "profit", ascending = False)
+
 
 
 
@@ -83,9 +139,70 @@ calculate_profit(train_data, 21, 24, max_exposure = 5e4, initial_balance = init_
 
 
 
-calculate_profit_yearly(test_data, 21, 24, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
-calculate_profit_yearly(test_data, 21, 23.7, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit_yearly(test_data, 20, 27, 
+                        max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit_yearly(test_data, 21, 23.7, 
+                        max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
 
-calculate_profit(test_data, 21, 24, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, , overnight_rate = global_overnight_rate)
-calculate_profit(test_data, 21, 23.7, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
-calculate_profit(test_data, 20, 27, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit(test_data, 21, 24, 
+                 max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit(test_data, 21, 23.7, 
+                 max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit(test_data, 20, 27, 
+                 max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+
+
+
+
+
+
+##############################################
+##############################################
+##############################################
+# For testing the algorithm to converge on max profits
+
+init_balance = 12000
+max_exposure = 50000
+global_end_loss = True
+global_overnight_rate = 0.065 / 365
+
+initial_buy_prices = list(np.linspace(10, 30, 300))
+initial_sell_prices = list(np.linspace(20, 80, 400))
+
+len(initial_buy_prices) * len(initial_sell_prices)
+
+train_data = raw_prices[raw_prices["Year"] < 2008].reset_index(drop = True)
+test_data = raw_prices[raw_prices["Year"] >= 2010].reset_index(drop = True)
+
+# We want at least 5 years of data
+n_years = r.randrange(5, 15)
+start_year = r.randrange(min(train_data["Year"]),
+                         max(train_data["Year"]) - n_years)
+start_month = r.randrange(1, 13)
+
+train_data_filtered = train_data[(train_data.Year >= start_year) &
+                                 (train_data.Year <= (start_year + n_years))]
+
+train_data_filtered = train_data_filtered[~((train_data_filtered.Year == start_year) &
+                                          (train_data_filtered.Month < start_month))]
+
+train_data_filtered = train_data_filtered[~((train_data_filtered.Year == train_data_filtered.Year.max()) &
+                                          (train_data_filtered.Month > start_month))]
+   
+train_data_filtered = train_data_filtered.reset_index(drop = True)
+
+# Get first set of results
+results_full = list_trading_profit(train_data_filtered,
+                              initial_buy_prices,
+                              initial_sell_prices,
+                              max_exposure = max_exposure,
+                              initial_balance = init_balance,
+                              end_loss = global_end_loss,
+                              overnight_rate = global_overnight_rate)
+    
+                       
+print(results_full.loc[0])
+
+##############################################
+##############################################
+##############################################

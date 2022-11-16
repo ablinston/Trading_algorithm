@@ -54,16 +54,17 @@ def calculate_profit(data,
     
     # Loop through each day
     for i in range(1, len(data.index)):
-        # Check if we're on the last day and sell if so
-        if ((i == len(data.index) - 1) & hold & end_loss):
-            balance += (data["Open"][i] - buy_price) * bet_per_pt
+       
         # If we're already holding, look to sell
-        elif hold:
+        if hold:
             if data["High"][i] >= sell_price:
                 # Calculate the profit
                 balance += (sell_price - buy_price) * bet_per_pt
                 # No long holding
                 hold = False
+                # Check if we're on the last day and sell if so
+            elif ((i == len(data.index) - 1) & end_loss):
+                balance += (data["Open"][i] - buy_price) * bet_per_pt
             else:
                 # We have to charge the overnight rate
                 balance -= (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * data["Open"][i] * bet_per_pt * overnight_rate
@@ -75,6 +76,66 @@ def calculate_profit(data,
                 hold = True
     return balance - initial_balance
 
+# This function calculates the profits for vectors of buy prices and corresponding sell prices
+def calculate_profit_vector(data, 
+                             buy_prices, 
+                             sell_prices, 
+                             max_exposure = 1e10, 
+                             initial_balance = 1e4, 
+                             end_loss = False, 
+                             overnight_rate = (0.025 / 365)):
+ 
+# =============================================================================
+#     # For debugging
+#     buy_prices = [10, 20, 30]
+#     sell_prices = [20, 30, 40]
+#     max_exposure = 1e5
+#     initial_balance = 1e4
+#     end_loss = False
+#     overnight_rate = (0.025 / 365)
+# =============================================================================
+    
+    # Initial variables
+    results_data = pd.DataFrame({"buy_price": buy_prices,
+                                 "sell_price": sell_prices,
+                                 "hold": [0] * len(buy_prices),
+                                 "bet_per_pt": [0] * len(buy_prices),
+                                 "balance": [initial_balance] * len(buy_prices)})
+    
+    results_data["buy_sell_diff"] = results_data["sell_price"] - results_data["buy_price"]
+    
+    # Loop through each day
+    for i in range(1, (len(data.index) - 1)):
+       
+        # Calculate overnight costs
+        results_data["overnight_costs"] = (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * data["Open"][i] * results_data["bet_per_pt"] * overnight_rate
+        
+        # Update balances with costs
+        results_data["balance"] -= results_data["overnight_costs"]
+        
+        # Check if we've hit a selling opportunity in the day
+        results_data["sell_ind"] = ((results_data["sell_price"] < data["High"][i]) & 
+                                   (results_data["sell_price"] > data["Low"][i]))
+        
+        # Sell out holding for those where it's true
+        results_data["balance"] += results_data["sell_ind"] * results_data["bet_per_pt"] * results_data["buy_sell_diff"]
+        
+        # Check if we've hit a day for buying
+        results_data["buy_ind"] = ((results_data["buy_price"] < data["High"][i]) & 
+                                   (results_data["buy_price"] > data["Low"][i]))
+        
+        # Work out the size of bet available
+        results_data["size_of_bet"] = results_data["balance"].apply(lambda x: min(x * 0.8, max_exposure))
+        
+        # Now bet on the shares where appropriate
+        results_data["bet_per_pt"] = results_data["buy_ind"] * results_data["size_of_bet"] / results_data["buy_price"]
+        
+
+    # On the last day, sell out if necessary
+    if end_loss:
+        results_data["balance"] += results_data["bet_per_pt"] * (data["Open"][len(data.index) - 1] - results_data["buy_price"])
+    
+    return results_data["balance"] - initial_balance
 
 
 # This function runs four further runs from a sorted data frame
@@ -198,15 +259,15 @@ def calculate_profit_yearly(data,
     return yearly_results
 
 
-def iterative_trading_profit(training_data, 
-                             buy_list, 
-                             sell_list, 
-                             max_exposure, 
-                             initial_balance, 
-                             end_loss, 
-                             overnight_rate):
+def list_trading_profit(training_data, 
+                        buy_list, 
+                        sell_list, 
+                        max_exposure, 
+                        initial_balance, 
+                        end_loss, 
+                        overnight_rate):
     
-    results_data = pd.DataFrame({"Buy":, "Sell":, "Profit":})
+    results = pd.DataFrame({"Buy":[0], "Sell":[80], "profit":[0]})
     
     for buy_price in buy_list:
         for sell_price in sell_list:
@@ -214,7 +275,7 @@ def iterative_trading_profit(training_data,
             if buy_price < sell_price:
                 results.loc[-1] = [buy_price,
                                    sell_price,
-                                   calculate_profit(train_data, 
+                                   calculate_profit(training_data, 
                                                     buy_price, 
                                                     sell_price, 
                                                     max_exposure = max_exposure, 
@@ -226,4 +287,66 @@ def iterative_trading_profit(training_data,
     return results
     
     
+def best_trading_results(training_data, 
+                        buy_list, 
+                        sell_list, 
+                        max_exposure, 
+                        initial_balance, 
+                        end_loss, 
+                        overnight_rate):
     
+    # Get first set of results
+    results = list_trading_profit(training_data,
+                                  buy_list,
+                                  sell_list,
+                                  max_exposure = max_exposure,
+                                  initial_balance = initial_balance,
+                                  end_loss = end_loss,
+                                  overnight_rate = overnight_rate)
+
+    # Sort all the results and reset the index
+    results = results.sort_values(by = "profit", ascending = False)
+    results = results.reset_index(drop = True)
+
+    buy_range = results[0:9]["Buy"].max() - results[0:9]["Buy"].min()
+    sell_range = results[0:9]["Sell"].max() - results[0:9]["Sell"].min()
+
+
+    # Now do an iterative list of computations to narrow down the values
+    it = 0
+    
+    while (buy_range > 0.2 or sell_range > 0.2):
+        
+        it += 1
+        
+        new_buy_list = np.linspace(results[0:9]["Buy"].min() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Buy"])), # add random to avoid getting stuck in infinite loop
+                                   results[0:9]["Buy"].max() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Buy"])),
+                                   8)
+
+        new_sell_list = np.linspace((results[0:9]["Sell"].min() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Sell"]))), 
+                                   (results[0:9]["Sell"].max() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Sell"]))),
+                                   8)
+        
+        results = pd.concat([results,
+                            list_trading_profit(training_data,
+                                                new_buy_list, #  ignore first and last as they've already been calc'd
+                                                new_sell_list,
+                                                max_exposure = max_exposure,
+                                                initial_balance = initial_balance,
+                                                end_loss = end_loss,
+                                                overnight_rate = overnight_rate)])
+        
+        # Sort all the results and reset the index
+        results = results.sort_values(by = "profit", ascending = False)
+        results = results.reset_index(drop = True)
+        
+        buy_range = results[0:9]["Buy"].max() - results[0:9]["Buy"].min()
+        sell_range = results[0:9]["Sell"].max() - results[0:9]["Sell"].min()
+        
+        print(f"Converging: current buy range is {buy_range} and sell range is {sell_range}")
+        
+        if it == 10:
+            print(f"Not converged. Exiting. Current buy range is {buy_range} and sell range is {sell_range}")
+            break
+        
+    return results
