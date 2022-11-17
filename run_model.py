@@ -5,6 +5,7 @@ import seaborn as s
 import random as r
 import statistics as st
 import os
+import time
 from datetime import datetime
 from itertools import product
 
@@ -20,10 +21,13 @@ raw_prices["Month"] = pd.to_numeric(raw_prices["Month"])
 raw_prices.head()
 raw_prices["Date_ft"] = raw_prices["Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
 
+# Convert to a polars data frame for speed
+raw_prices = pl.DataFrame(raw_prices)
+
 prices_by_month_year = raw_prices.groupby(by = ["Year", "Month"]).mean()
 prices_by_month_year.head()
 
-plt.plot(list(prices_by_month_year["Open"]))
+#plt.plot(list(prices_by_month_year["Open"]))
 
 
 # Initial exploratory analysis
@@ -108,6 +112,7 @@ test_data = raw_prices[raw_prices["Year"] >= 2010].reset_index(drop = True)
     
 ##########################################
 
+start_time = time.time()
 
 # Vectorised
 initial_buy_prices = list(np.linspace(10, 40, 300))
@@ -125,6 +130,9 @@ results["profit"] = calculate_profit_vector(train_data,
                                               initial_balance = init_balance,
                                               end_loss = global_end_loss,
                                               overnight_rate = global_overnight_rate)
+
+print("--- %s seconds ---" % (time.time() - start_time))
+
 
 results[results.profit > 10000]["Buy"].min()
 results[results.profit > 10000]["Buy"].max()

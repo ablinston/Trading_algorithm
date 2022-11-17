@@ -85,41 +85,50 @@ def calculate_profit_vector(data,
                              end_loss = False, 
                              overnight_rate = (0.025 / 365)):
  
-# =============================================================================
-#     # For debugging
-#     buy_prices = [10, 20, 30]
-#     sell_prices = [20, 30, 40]
-#     max_exposure = 1e5
-#     initial_balance = 1e4
-#     end_loss = False
-#     overnight_rate = (0.025 / 365)
-# =============================================================================
+    # For debugging
+    data = raw_prices
+    buy_prices = [10, 20, 30]
+    sell_prices = [20, 30, 40]
+    max_exposure = 1e5
+    initial_balance = 1e4
+    end_loss = False
+    overnight_rate = (0.025 / 365)
     
     # Initial variables
-    results_data = pd.DataFrame({"buy_price": buy_prices,
+    results_data = pl.DataFrame({"buy_price": buy_prices,
                                  "sell_price": sell_prices,
                                  "hold": [0] * len(buy_prices),
                                  "bet_per_pt": [0] * len(buy_prices),
                                  "balance": [initial_balance] * len(buy_prices)})
-    
-    results_data["buy_sell_diff"] = results_data["sell_price"] - results_data["buy_price"] - 0.15 # the spread paid
+       
+    results_data = results_data.with_column((pl.col("sell_price") - pl.col("buy_price") - 0.15).alias("buy_sell_diff")) # includes the spread paid deducted
     
     # Loop through each day
     for i in range(1, (len(data.index) - 1)):
        
         # Calculate overnight costs
-        results_data["overnight_costs"] = (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * data["Open"][i] * results_data["bet_per_pt"] * overnight_rate
-        
+        results_data = results_data.with_column((pl.col("bet_per_pt") * 
+                                                 (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * 
+                                                 data["Open"][i] *
+                                                 overnight_rate
+                                                ).alias("overnight_costs"))
+
         # Update balances with costs
-        results_data["balance"] -= results_data["overnight_costs"]
+        results_data = results_data.with_column((pl.col("balance") - pl.col("overnight_costs")).alias("balance"))
         
         # Check if we've hit a selling opportunity in the day
-        results_data["sell_ind"] = ((results_data["sell_price"] < data["High"][i]) & 
-                                   (results_data["sell_price"] > data["Low"][i]))
+        
+        results_data = results_data.with_column(((pl.col("sell_price") > data["High"][i]) &
+                                                 (pl.col("sell_price") < data["Low"][i])
+                                                 ).alias("sell_ind"))
         
         # Sell out holding for those where it's true
-        results_data["balance"] += results_data["sell_ind"] * results_data["bet_per_pt"] * results_data["buy_sell_diff"]
-        
+        results_data = results_data.with_column((pl.col("balance") + 
+                                                 pl.col("sell_ind") *
+                                                 pl.col("bet_per_pt") *
+                                                 pl.col("buy_sell_diff")
+                                                 ).alias("balance"))
+                
         # Check if we've hit a day for buying
         results_data["buy_ind"] = ((results_data["buy_price"] < data["High"][i]) & 
                                    (results_data["buy_price"] > data["Low"][i]))
