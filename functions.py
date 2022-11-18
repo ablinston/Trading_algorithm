@@ -137,12 +137,11 @@ def calculate_profit_vector(data,
                                                  ).alias("buy_ind")
         
         # Work out the size of bet available
-        ).with_column((pl.col("balance").apply(lambda x: min(x * 0.8, max_exposure))
-                                                 ).alias("size_of_bet"))
+        ).with_column((pl.col("balance")*0.5
+                                                 ).alias("size_of_bet")
                 
         # Now bet on the shares where appropriate
-        ).with_column((pl.col("sell_ind").apply(lambda x: ~x) *
-                                                 pl.col("buy_ind") *
+        ).with_column((pl.col("buy_ind") *
                                                  pl.col("size_of_bet") /
                                                  pl.col("buy_price")
                                                  ).alias("bet_per_pt"))
