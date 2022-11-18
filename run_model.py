@@ -15,6 +15,9 @@ import polars as pl
 
 raw_prices = pd.read_csv("C:/Users/Andy/Documents/Trading_algorithm/^VIX.csv")
 
+# Remove data where we don't have high and low
+raw_prices = raw_prices[raw_prices.High != raw_prices.Low]
+
 # Change format of the date column
 raw_prices[["Year", "Month", "Day"]] = raw_prices["Date"].str.split("-", expand = True)
 raw_prices["Year"] = pd.to_numeric(raw_prices["Year"])
@@ -135,6 +138,7 @@ results["profit"] = calculate_profit_vector(train_data,
 
 print("--- %s seconds ---" % (time.time() - start_time))
 
+results.sort_values("profit", ascending = False)
 
 results[results.profit > 10000]["Buy"].min()
 results[results.profit > 10000]["Buy"].max()
@@ -202,7 +206,7 @@ results.head(10)
 calculate_profit_yearly(train_data, 21.3, 23.3, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss)
 calculate_profit_yearly(train_data, 21, 24, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss)
 
-calculate_profit(train_data, 17.1, 48.4, max_exposure = 2e4, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit(train_data, 21.137124, 22.909699, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
 calculate_profit(train_data, 21, 23.7, max_exposure = 5e4, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
 calculate_profit(train_data, 21, 24, max_exposure = 5e4, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
 
