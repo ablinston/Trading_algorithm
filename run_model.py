@@ -8,6 +8,8 @@ import os
 import time
 from datetime import datetime
 from itertools import product
+import polars as pl
+
 
 # Read in data
 
@@ -22,7 +24,7 @@ raw_prices.head()
 raw_prices["Date_ft"] = raw_prices["Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
 
 # Convert to a polars data frame for speed
-raw_prices = pl.DataFrame(raw_prices)
+#raw_prices = pl.DataFrame(raw_prices)
 
 prices_by_month_year = raw_prices.groupby(by = ["Year", "Month"]).mean()
 prices_by_month_year.head()
@@ -40,8 +42,8 @@ raw_prices["High"].max()
 ##############################################
 # Run algorithm
 
-init_balance = 12000
-max_exposure = 50000
+init_balance = 20000
+max_exposure = 0.5
 global_end_loss = True
 global_overnight_rate = 0.065 / 365
 
@@ -256,17 +258,8 @@ train_data_filtered = train_data_filtered[~((train_data_filtered.Year == train_d
    
 train_data_filtered = train_data_filtered.reset_index(drop = True)
 
-# Get first set of results
-results_full = list_trading_profit(train_data_filtered,
-                              initial_buy_prices,
-                              initial_sell_prices,
-                              max_exposure = max_exposure,
-                              initial_balance = init_balance,
-                              end_loss = global_end_loss,
-                              overnight_rate = global_overnight_rate)
+
     
-                       
-print(results_full.loc[0])
 
 ##############################################
 ##############################################
