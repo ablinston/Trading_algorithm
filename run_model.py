@@ -140,68 +140,67 @@ print("--- %s seconds ---" % (time.time() - start_time))
 
 results.sort_values("profit", ascending = False)
 
-results[results.profit > 10000]["Buy"].min()
-results[results.profit > 10000]["Buy"].max()
-results[results.profit > 10000]["Sell"].min()
-results[results.profit > 10000]["Sell"].max()
+results["max_profit"] = results["profit"].max()
+# Work out the range within 5%
+best_results = results[results.profit > 0.95 * results.max_profit]
 
-# =============================================================================
-# # Add this to an overall data frame and then run same model on random
-# results["Run"] = 1
-# results["CAGR_prop"] = (results["profit"] / init_balance) ** (1 / (train_data["Year"].max() - train_data["Year"].min())) - 1
-# overall_results = results
-# del results
-# 
-# r.seed(2432)
-# 
-# for i in range(2,20):
-#     
-#     # We want at least 5 years of data
-#     n_years = r.randrange(5, 17)
-#     start_year = r.randrange(min(train_data["Year"]),
-#                              max(train_data["Year"]) - n_years)
-#     start_month = r.randrange(1, 13)
-#     
-#     train_data_filtered = train_data[(train_data.Year >= start_year) &
-#                                      (train_data.Year <= (start_year + n_years))]
-#     
-#     train_data_filtered = train_data_filtered[~((train_data_filtered.Year == start_year) &
-#                                               (train_data_filtered.Month < start_month))]
-#     
-#     train_data_filtered = train_data_filtered[~((train_data_filtered.Year == train_data_filtered.Year.max()) &
-#                                               (train_data_filtered.Month > start_month))]
-#     
-#     train_data_filtered = train_data_filtered.reset_index(drop = True)
-#     
-#     results = pd.DataFrame(list(product(initial_buy_prices, initial_sell_prices)),
-#                            columns = ["Buy", "Sell"])
-#     # Remove where buy > sell
-#     results = results[results.Sell > results.Buy]
-# 
-#     results["profit"] = calculate_profit_vector(train_data_filtered,
-#                                                   results["Buy"],
-#                                                   results["Sell"],
-#                                                   max_exposure = max_exposure,
-#                                                   initial_balance = init_balance,
-#                                                   end_loss = global_end_loss,
-#                                                   overnight_rate = global_overnight_rate)
-#     
-#     results["Run"] = i
-#     results["CAGR_prop"] = (results["profit"] / init_balance + 1) ** (1 / (train_data["Year"].max() - train_data["Year"].min())) - 1
-#     overall_results = pd.concat([results,
-#                                 overall_results])
-#     print(f"Run {i} done.")
-#     del results
-#     
-#     overall_results["CAGR_prop"] = (overall_results["profit"] / init_balance + 1) ** (1 / (train_data["Year"].max() - train_data["Year"].min())) - 1
-# 
-# overall_results.groupby(["Buy","Sell"]).mean().sort_values("CAGR_prop", ascending = False)
-# =============================================================================
-
-results = results.sort_values(by = "profit", ascending = False)
-results.head(10)
+print(best_results["Buy"].min())
+print(best_results["Buy"].max())
+print(best_results["Sell"].min())
+print(best_results["Sell"].max())
 
 ##########################################
+
+start_time = time.time()
+
+# Vectorised
+initial_buy_prices = list(np.linspace(8, 18, 10))
+initial_sell_prices = list(np.linspace(8, 30, 10))
+
+results = pd.DataFrame(list(product(initial_buy_prices, initial_sell_prices)),
+                       columns = ["Buy", "Sell"])
+# Remove where buy > sell
+results = results[results.Sell > (results.Buy + 0.15)] # spread added
+
+results["profit"] = calculate_profit_vector(train_data,
+                                              results["Buy"],
+                                              results["Sell"],
+                                              max_exposure = max_exposure,
+                                              initial_balance = init_balance,
+                                              end_loss = global_end_loss,
+                                              overnight_rate = global_overnight_rate)
+
+print("--- %s seconds ---" % (time.time() - start_time))
+
+results.sort_values("profit", ascending = False)
+
+results["max_profit"] = results["profit"].max()
+# Work out the range within 5%
+best_results2 = results[results.profit > 0.95 * results.max_profit]
+
+print(best_results2["Buy"].min())
+print(best_results2["Buy"].max())
+print(best_results2["Sell"].min())
+print(best_results2["Sell"].max())
+
+
+
+
+##########################################
+
+# Test the model with a monte carlo
+
+one_year_monte_carlo = monte_carlo_test_runs(data = test_data,
+                                             n_iterations = 1000,
+                                             n_years = 1,
+                                             buy_prices = [21.1], 
+                                             sell_prices = [23.9], 
+                                             max_exposure = max_exposure, 
+                                             initial_balance = init_balance, 
+                                             end_loss = True, 
+                                             overnight_rate = global_overnight_rate)
+
+one_year_monte_carlo.head(1000)
 
 calculate_profit_yearly(train_data, 21.3, 23.3, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss)
 calculate_profit_yearly(train_data, 21, 24, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss)

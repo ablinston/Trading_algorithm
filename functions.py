@@ -4,6 +4,7 @@ import random as r
 import statistics as st
 from datetime import datetime
 import polars as pl
+import pdb
 
 # =============================================================================
 # def calculate_profit(data, buy_price, sell_price, max_exposure = 1e10, initial_balance = 1e4, end_loss = True, overnight_rate = 0):
@@ -113,9 +114,9 @@ def calculate_profit_vector(data,
  
 # =============================================================================
 #     # For debugging
-#     data = raw_prices
-#     buy_prices = [10.1, 20.1, 20.1]
-#     sell_prices = [20.1, 30.1, 40.1]
+#     data = data_subset
+#     buy_prices = results["Buy"]
+#     sell_prices = results["Sell"]
 #     max_exposure = 0.5
 #     initial_balance = 20000
 #     end_loss = False
@@ -123,12 +124,14 @@ def calculate_profit_vector(data,
 #     daily_balances = True
 # =============================================================================
     
+    # To avoid errors, reset the index
+    data = data.reset_index(drop = True)
+
     # Initial variables
-    results_data = pl.DataFrame({"buy_price": buy_prices,
-                                 "sell_price": sell_prices,
-                                 "hold": [0] * len(buy_prices),
-                                 "bet_per_pt": [0] * len(buy_prices),
-                                 "balance": [initial_balance] * len(buy_prices)})
+    results_data = pl.DataFrame({"buy_price": np.array(buy_prices, dtype = float),
+                                 "sell_price": np.array(sell_prices, dtype = float),
+                                 "bet_per_pt": np.array([0] * len(buy_prices), dtype = float),
+                                 "balance": np.array([initial_balance] * len(buy_prices), dtype = float)})
        
     results_data = results_data.with_column((pl.col("sell_price") - pl.col("buy_price") - 0.15).alias("buy_sell_diff")) # includes the spread paid deducted
     
@@ -222,110 +225,111 @@ def calculate_profit_yearly(data,
                             end_loss = False, 
                             overnight_rate = (0.025 / 365)):
 
-    # Create a results dataframe
-    min_year = data["Year"].min()
-    max_year = data["Year"].max()
-    yearly_results = pd.DataFrame({"Year": range(min_year, max_year + 1),
-                                   "Balance": ([0] * (max_year - min_year + 1))})
+# =============================================================================
+#     # For debugging
+#     data = raw_prices
+#     buy_price = 20.1
+#     sell_price = 30.1
+#     max_exposure = 0.5
+#     initial_balance = 20000
+#     end_loss = False
+#     overnight_rate = (0.065 / 365)
+# =============================================================================
+
+    daily_data = calculate_profit_vector(data, 
+                                        pd.Series([buy_price]), # input as a Series
+                                        pd.Series([sell_price]), 
+                                        max_exposure = max_exposure, 
+                                        initial_balance = initial_balance, 
+                                        end_loss = end_loss, 
+                                        overnight_rate = overnight_rate,
+                                        daily_balances = True).to_pandas()
     
-    # Initial variables
-    hold = False
-    bet_per_pt = 0
-    balance = initial_balance
-    
-    # Loop through each day
-    for i in range(1, len(data.index)):
-        # Check if we're on the last day and sell if so
-        if ((i == len(data.index) - 1)):
-            if hold & end_loss:
-                balance += (data["Open"][i] - buy_price) * bet_per_pt
-            yearly_results.loc[yearly_results["Year"] == data["Year"][i], "Balance"] += balance
-            
-        # If we're already holding, look to sell
-        elif hold:
-            if data["High"][i] >= sell_price:
-                # Calculate the profit
-                balance += (sell_price - buy_price) * bet_per_pt
-                # No long holding
-                hold = False
-            else:
-                # We have to charge the overnight rate
-                balance -= (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * data["Open"][i] * bet_per_pt * overnight_rate
-        else:
-            # Check if there is an opportunity to buy
-            if (data["Low"][i] <= buy_price) & (data["High"][i] > buy_price):
-                # Work out how many shares you have
-                bet_per_pt = min(max_exposure, balance * 0.8) / buy_price # always leave some balance to pay financing for a few years
-                hold = True
-            # If we're on the first day of the year, record the balance
-        if data["Year"][i] > data["Year"][i - 1]:
-            yearly_results.loc[yearly_results["Year"] == (data["Year"][i - 1]), "Balance"] = balance
-                
-    return yearly_results
+    # Split the date column
+    daily_data[["Year", "Month", "Day"]] = daily_data["Date"].str.split("-", expand = True)
+
+    yearly_data = daily_data.groupby("Year", as_index = False).last()
+                    
+    return yearly_data[["Year", "balance"]]
 
 
    
     
-def best_trading_results(training_data, 
-                        buy_list, 
-                        sell_list, 
-                        max_exposure, 
-                        initial_balance, 
-                        end_loss, 
-                        overnight_rate):
+def monte_carlo_test_runs(data,
+                            n_iterations,
+                            n_years,
+                            buy_prices, 
+                            sell_prices, 
+                            max_exposure = 1, 
+                            initial_balance = 1e4, 
+                            end_loss = False, 
+                            overnight_rate = (0.065 / 365)):
+     
     
-    # Get first set of results
-    results = list_trading_profit(training_data,
-                                  buy_list,
-                                  sell_list,
-                                  max_exposure = max_exposure,
-                                  initial_balance = initial_balance,
-                                  end_loss = end_loss,
-                                  overnight_rate = overnight_rate)
-
-    # Sort all the results and reset the index
-    results = results.sort_values(by = "profit", ascending = False)
-    results = results.reset_index(drop = True)
-
-    buy_range = results[0:9]["Buy"].max() - results[0:9]["Buy"].min()
-    sell_range = results[0:9]["Sell"].max() - results[0:9]["Sell"].min()
-
-
-    # Now do an iterative list of computations to narrow down the values
-    it = 0
+# =============================================================================
+#     # For debugging
+#     data = raw_prices
+#     n_iterations = 2
+#     n_years = 3
+#     buy_prices = [20.1] 
+#     sell_prices = [30.1]
+#     max_exposure = 0.5
+#     initial_balance = 1e4 
+#     end_loss = True
+#     overnight_rate = (0.065 / 365)
+# =============================================================================
     
-    while (buy_range > 0.2 or sell_range > 0.2):
+    # Set the minimum start year given the data we have
+    min_start_year = min(data["Year"])
+    max_start_year = max(data["Year"]) - n_years
+    
+    # Prepare stack of results
+    results_stack = pd.DataFrame(columns = ["Buy", "Sell", "Profit", "mc_run"])
+    
+    for iteration in range(1, n_iterations + 1):
+    
+        # We want at least n years of data, so choose a random start point
+        start_year = r.randrange(min_start_year,
+                                 max_start_year)
+        # Choose a random start month
+        start_month = r.randrange(1, 13)
         
-        it += 1
+        data_subset = data[(data.Year >= start_year) &
+                           (data.Year <= (start_year + n_years))]
         
-        new_buy_list = np.linspace(results[0:9]["Buy"].min() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Buy"])), # add random to avoid getting stuck in infinite loop
-                                   results[0:9]["Buy"].max() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Buy"])),
-                                   8)
+        data_subset = data_subset[~((data_subset.Year == start_year) &
+                                    (data_subset.Month < start_month))]
+        
+        data_subset = data_subset[~((data_subset.Year == data_subset.Year.max()) &
+                                    (data_subset.Month > start_month))]
+           
+        data_subset = data_subset.reset_index(drop = True)
+        
+        # Prepare inputs for the model
+        results = pd.DataFrame(list(product(buy_prices, sell_prices)),
+                               columns = ["Buy", "Sell"])
+        # Remove where buy > sell
+        results = results[results.Sell > (results.Buy + 0.15)] # spread added
+        
+        # Now work out the best buy and sell
+        results["Profit"] = calculate_profit_vector(data_subset,
+                                                     results["Buy"],
+                                                     results["Sell"],
+                                                     max_exposure = max_exposure, 
+                                                     initial_balance = initial_balance,
+                                                     end_loss = end_loss, 
+                                                     overnight_rate = overnight_rate)
+        
+        # Now add the results to the stack
+        results["mc_run"] = iteration
+        
+        results_stack = pd.concat([results_stack,
+                                   results])
 
-        new_sell_list = np.linspace((results[0:9]["Sell"].min() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Sell"]))), 
-                                   (results[0:9]["Sell"].max() + r.gauss(0, 0.2 * st.stdev(results[0:9]["Sell"]))),
-                                   8)
-        
-        results = pd.concat([results,
-                            list_trading_profit(training_data,
-                                                new_buy_list, #  ignore first and last as they've already been calc'd
-                                                new_sell_list,
-                                                max_exposure = max_exposure,
-                                                initial_balance = initial_balance,
-                                                end_loss = end_loss,
-                                                overnight_rate = overnight_rate)])
-        
-        # Sort all the results and reset the index
-        results = results.sort_values(by = "profit", ascending = False)
-        results = results.reset_index(drop = True)
-        
-        buy_range = results[0:9]["Buy"].max() - results[0:9]["Buy"].min()
-        sell_range = results[0:9]["Sell"].max() - results[0:9]["Sell"].min()
-        
-        print(f"Converging: current buy range is {buy_range} and sell range is {sell_range}")
-        
-        if it == 10:
-            print(f"Not converged. Exiting. Current buy range is {buy_range} and sell range is {sell_range}")
-            break
-        
-    return results
+        if iteration % 50 == 0:
+            print(f"{iteration} runs complete")
+    
+        del results
+        del data_subset
+    
+    return results_stack
