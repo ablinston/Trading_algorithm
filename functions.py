@@ -85,14 +85,16 @@ def calculate_profit_vector(data,
                              end_loss = False, 
                              overnight_rate = (0.025 / 365)):
  
-    # For debugging
-    data = raw_prices
-    buy_prices = [10, 20, 20]
-    sell_prices = [20, 30, 40]
-    max_exposure = 0.5
-    initial_balance = 20000
-    end_loss = False
-    overnight_rate = (0.025 / 365)
+# =============================================================================
+#     # For debugging
+#     data = raw_prices
+#     buy_prices = [10, 20, 20]
+#     sell_prices = [20, 30, 40]
+#     max_exposure = 0.5
+#     initial_balance = 20000
+#     end_loss = False
+#     overnight_rate = (0.025 / 365)
+# =============================================================================
     
     # Initial variables
     results_data = pl.DataFrame({"buy_price": buy_prices,
@@ -131,19 +133,19 @@ def calculate_profit_vector(data,
                 
         # Check if we've hit a day for buying
         results_data = results_data.with_column(((pl.col("buy_price") < data["High"][i]) &
-                       (pl.col("buy_price") > data["Low"][i]))
-                       .alias("buy_ind"))
+                                                 (pl.col("buy_price") > data["Low"][i]))
+                                                .alias("buy_ind"))
         
         # Work out the size of bet available
         results_data = results_data.with_column((pl.col("balance") *
-                       max_exposure)
-                       .alias("size_of_bet"))
+                                                 max_exposure)
+                                                .alias("size_of_bet"))
                 
         # Now bet on the shares where appropriate
         results_data = results_data.with_column((pl.col("buy_ind") *
-                       pl.col("size_of_bet") /
-                       pl.col("buy_price"))
-                       .alias("bet_per_pt"))
+                                                 pl.col("size_of_bet") /
+                                                 pl.col("buy_price"))
+                                                .alias("bet_per_pt"))
         
     # On the last day, sell out if necessary
     if end_loss:
