@@ -85,14 +85,16 @@ def calculate_profit_vector(data,
                              end_loss = False, 
                              overnight_rate = (0.025 / 365)):
  
-    # For debugging
-    data = raw_prices
-    buy_prices = [10, 20, 30]
-    sell_prices = [20, 30, 40]
-    max_exposure = 1e5
-    initial_balance = 1e4
-    end_loss = False
-    overnight_rate = (0.025 / 365)
+# =============================================================================
+#     # For debugging
+#     data = raw_prices
+#     buy_prices = [10, 20, 30]
+#     sell_prices = [20, 30, 40]
+#     max_exposure = 1e5
+#     initial_balance = 1e4
+#     end_loss = False
+#     overnight_rate = (0.025 / 365)
+# =============================================================================
     
     # Initial variables
     results_data = pl.DataFrame({"buy_price": buy_prices,
@@ -111,39 +113,47 @@ def calculate_profit_vector(data,
                                                  (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * 
                                                  data["Open"][i] *
                                                  overnight_rate
-                                                ).alias("overnight_costs"))
-
+                                                ).alias("overnight_costs")
+                                                
         # Update balances with costs
-        results_data = results_data.with_column((pl.col("balance") - pl.col("overnight_costs")).alias("balance"))
+        ).with_column((pl.col("balance") - pl.col("overnight_costs")).alias("balance")
         
         # Check if we've hit a selling opportunity in the day
         
-        results_data = results_data.with_column(((pl.col("sell_price") > data["High"][i]) &
+        ).with_column(((pl.col("sell_price") > data["High"][i]) &
                                                  (pl.col("sell_price") < data["Low"][i])
-                                                 ).alias("sell_ind"))
+                                                 ).alias("sell_ind")
         
         # Sell out holding for those where it's true
-        results_data = results_data.with_column((pl.col("balance") + 
+        ).with_column((pl.col("balance") + 
                                                  pl.col("sell_ind") *
                                                  pl.col("bet_per_pt") *
                                                  pl.col("buy_sell_diff")
-                                                 ).alias("balance"))
+                                                 ).alias("balance")
                 
         # Check if we've hit a day for buying
-        results_data["buy_ind"] = ((results_data["buy_price"] < data["High"][i]) & 
-                                   (results_data["buy_price"] > data["Low"][i]))
+        ).with_column(((pl.col("buy_price") < data["High"][i]) &
+                                                 (pl.col("buy_price") > data["Low"][i])
+                                                 ).alias("buy_ind")
         
         # Work out the size of bet available
-        results_data["size_of_bet"] = results_data["balance"].apply(lambda x: min(x * 0.8, max_exposure))
-        
+        ).with_column((pl.col("balance").apply(lambda x: min(x * 0.8, max_exposure))
+                                                 ).alias("size_of_bet"))
+                
         # Now bet on the shares where appropriate
-        results_data["bet_per_pt"] = ~results_data["sell_ind"] * results_data["buy_ind"] * results_data["size_of_bet"] / results_data["buy_price"] # Add in opposite of sell so no buying and selling on same day
+        ).with_column((pl.col("sell_ind").apply(lambda x: ~x) *
+                                                 pl.col("buy_ind") *
+                                                 pl.col("size_of_bet") /
+                                                 pl.col("buy_price")
+                                                 ).alias("bet_per_pt"))
         
-
     # On the last day, sell out if necessary
     if end_loss:
-        results_data["balance"] += results_data["bet_per_pt"] * (data["Open"][len(data.index) - 1] - results_data["buy_price"])
-    
+        results_data = results_data.with_column((pl.col("balance") +
+                                                 pl.col("bet_per_pt") *
+                                                 (data["Open"][len(data.index) - 1] - pl.col("buy_price"))
+                                                 ).alias("balance"))
+            
     return results_data["balance"] - initial_balance
 
 

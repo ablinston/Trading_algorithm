@@ -8,6 +8,8 @@ import os
 import time
 from datetime import datetime
 from itertools import product
+import polars as pl
+
 
 # Read in data
 
@@ -22,7 +24,7 @@ raw_prices.head()
 raw_prices["Date_ft"] = raw_prices["Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
 
 # Convert to a polars data frame for speed
-raw_prices = pl.DataFrame(raw_prices)
+#raw_prices = pl.DataFrame(raw_prices)
 
 prices_by_month_year = raw_prices.groupby(by = ["Year", "Month"]).mean()
 prices_by_month_year.head()
