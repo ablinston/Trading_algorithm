@@ -154,8 +154,8 @@ print(best_results["Sell"].max())
 start_time = time.time()
 
 # Vectorised
-initial_buy_prices = list(np.linspace(8, 18, 10))
-initial_sell_prices = list(np.linspace(8, 30, 10))
+initial_buy_prices = list(np.linspace(8, 18, 200))
+initial_sell_prices = list(np.linspace(8, 30, 300))
 
 results = pd.DataFrame(list(product(initial_buy_prices, initial_sell_prices)),
                        columns = ["Buy", "Sell"])
@@ -199,6 +199,29 @@ one_year_monte_carlo = monte_carlo_test_runs(data = test_data,
                                              initial_balance = init_balance, 
                                              end_loss = True, 
                                              overnight_rate = global_overnight_rate)
+
+one_year_monte_carlo["Percent_profit"] = one_year_monte_carlo["Profit"] / init_balance * 100
+
+# Plot the results
+one_year_monte_carlo["Percent_profit"].plot.hist(grid = True,
+                                                 bins = 20)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 one_year_monte_carlo.head(1000)
 

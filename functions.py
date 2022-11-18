@@ -112,17 +112,15 @@ def calculate_profit_vector(data,
                              overnight_rate = (0.025 / 365),
                              daily_balances = False):
  
-# =============================================================================
-#     # For debugging
-#     data = data_subset
-#     buy_prices = results["Buy"]
-#     sell_prices = results["Sell"]
-#     max_exposure = 0.5
-#     initial_balance = 20000
-#     end_loss = False
-#     overnight_rate = (0.065 / 365)
-#     daily_balances = True
-# =============================================================================
+    # For debugging
+    data = data_subset
+    buy_prices = results["Buy"]
+    sell_prices = results["Sell"]
+    max_exposure = 0.5
+    initial_balance = 10000
+    end_loss = False
+    overnight_rate = (0.065 / 365)
+    daily_balances = True
     
     # To avoid errors, reset the index
     data = data.reset_index(drop = True)
@@ -149,9 +147,9 @@ def calculate_profit_vector(data,
        
         # Calculate overnight costs
         results_data = results_data.with_column((pl.col("bet_per_pt") * 
-                                                 (data["Date_ft"][i] - data["Date_ft"][i - 1]).days * 
-                                                 data["Open"][i] *
-                                                 overnight_rate
+                                                 pl.lit((data["Date_ft"][i] - data["Date_ft"][i - 1]).days) * 
+                                                 pl.lit(data["Open"][i]) *
+                                                 pl.lit(overnight_rate)
                                                 ).alias("overnight_costs"))
                                                 
         # Update balances with costs
@@ -159,7 +157,7 @@ def calculate_profit_vector(data,
         
         # Check if we've hit a selling opportunity in the day
         results_data = results_data.with_column(((pl.col("bet_per_pt") > 0) &
-                                                 (pl.col("sell_price") < data["High"][i])
+                                                 (pl.col("sell_price") < pl.lit(data["High"][i]))
                                                  ).alias("sell_ind"))
         
         # Sell out holding for those where it's true
@@ -171,13 +169,13 @@ def calculate_profit_vector(data,
                         
         # Check if we've hit a day for buying before reseting bet (so we don't buy and sell on same day)
         results_data = results_data.with_column(((pl.col("bet_per_pt") == 0) &
-                                                 (pl.col("buy_price") < data["High"][i]) &
-                                                 (pl.col("buy_price") > data["Low"][i]))
+                                                 (pl.col("buy_price") < pl.lit(data["High"][i])) &
+                                                 (pl.col("buy_price") > pl.lit(data["Low"][i])))
                                                 .alias("buy_ind"))
         
         # Set the bet to 0 if sell indicator flagged
         results_data = results_data.with_column((pl.when(pl.col("sell_ind")).
-                                                 then(0).
+                                                 then(pl.lit(0)).
                                                  otherwise(pl.col("bet_per_pt")))
                                                  .alias("bet_per_pt"))
         
@@ -185,7 +183,7 @@ def calculate_profit_vector(data,
         # Now bet on the shares where appropriate
         results_data = results_data.with_column((pl.when(pl.col("buy_ind"))
                                                  .then(pl.col("balance") *
-                                                       max_exposure /
+                                                       pl.lit(max_exposure) /
                                                        pl.col("buy_price"))
                                                  .otherwise(pl.col("bet_per_pt")))
                                                 .alias("bet_per_pt"))
@@ -206,13 +204,17 @@ def calculate_profit_vector(data,
     if end_loss:
         results_data = results_data.with_column((pl.col("balance") +
                                                  pl.col("bet_per_pt") *
-                                                 (data["Open"][len(data.index) - 1] - pl.col("buy_price") - 0.15)
+                                                 (pl.lit(data["Open"][len(data.index) - 1]) - pl.col("buy_price") - pl.lit(0.15))
                                                  ).alias("balance"))
         
+    # Calculate profits
+    results_data = results_data.with_column((pl.col("balance") - initial_balance)
+                                            .alias("profit"))
+    
     if daily_balances:
         return daily_balance_data
     else:        
-        return results_data["balance"] - initial_balance
+        return results_data["profit"]
 
 
 
@@ -262,7 +264,7 @@ def monte_carlo_test_runs(data,
                             sell_prices, 
                             max_exposure = 1, 
                             initial_balance = 1e4, 
-                            end_loss = False, 
+                            end_loss = True, 
                             overnight_rate = (0.065 / 365)):
      
     
@@ -270,7 +272,7 @@ def monte_carlo_test_runs(data,
 #     # For debugging
 #     data = raw_prices
 #     n_iterations = 2
-#     n_years = 3
+#     n_years = 1
 #     buy_prices = [20.1] 
 #     sell_prices = [30.1]
 #     max_exposure = 0.5

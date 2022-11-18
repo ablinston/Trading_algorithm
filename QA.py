@@ -33,3 +33,4 @@ first.merge(second, on = "Date").to_csv("C:/Users/Andy/Documents/Trading_algorit
 
 ##############################################
 
+te.to_pandas().to_csv("C:/Users/Andy/Documents/Trading_algorithm/te.csv")
