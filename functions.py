@@ -112,15 +112,17 @@ def calculate_profit_vector(data,
                              overnight_rate = (0.025 / 365),
                              daily_balances = False):
  
-    # For debugging
-    data = data_subset
-    buy_prices = results["Buy"]
-    sell_prices = results["Sell"]
-    max_exposure = 0.5
-    initial_balance = 10000
-    end_loss = False
-    overnight_rate = (0.065 / 365)
-    daily_balances = True
+# =============================================================================
+#     # For debugging
+#     data = data_subset
+#     buy_prices = results["Buy"]
+#     sell_prices = results["Sell"]
+#     max_exposure = 0.5
+#     initial_balance = 10000
+#     end_loss = False
+#     overnight_rate = (0.065 / 365)
+#     daily_balances = True
+# =============================================================================
     
     # To avoid errors, reset the index
     data = data.reset_index(drop = True)
@@ -220,8 +222,8 @@ def calculate_profit_vector(data,
 
 # This function calculates profits for single years only
 def calculate_profit_yearly(data, 
-                            buy_price, 
-                            sell_price, 
+                            buy_prices, # a list of values
+                            sell_prices, 
                             max_exposure, 
                             initial_balance, 
                             end_loss = False, 
@@ -239,10 +241,10 @@ def calculate_profit_yearly(data,
 # =============================================================================
 
     daily_data = calculate_profit_vector(data, 
-                                        pd.Series([buy_price]), # input as a Series
-                                        pd.Series([sell_price]), 
+                                        pd.Series(buy_prices), # input as a Series
+                                        pd.Series(sell_prices), 
                                         max_exposure = max_exposure, 
-                                        initial_balance = initial_balance, 
+                                        initial_balance = initial_balance / len(buy_prices), 
                                         end_loss = end_loss, 
                                         overnight_rate = overnight_rate,
                                         daily_balances = True).to_pandas()
@@ -318,7 +320,7 @@ def monte_carlo_test_runs(data,
                                                      results["Buy"],
                                                      results["Sell"],
                                                      max_exposure = max_exposure, 
-                                                     initial_balance = initial_balance,
+                                                     initial_balance = (initial_balance / len(buy_prices)), # split the balance across the strategies being run
                                                      end_loss = end_loss, 
                                                      overnight_rate = overnight_rate)
         
@@ -334,4 +336,17 @@ def monte_carlo_test_runs(data,
         del results
         del data_subset
     
+    results_stack["Percent_profit"] = results_stack["Profit"] / initial_balance * 100
+    
     return results_stack
+
+
+# This function returns stats associated with losers from results of monte carlo
+def loser_info(data):
+    
+
+    prob_of_losing = round(len(data[data.Profit < 0].index) / len(data.index) * 100, 1)
+    average_loss = round(data[data.Profit < 0]["Percent_profit"].mean(),1)
+    max_loss = round(data[data.Profit < 0]["Percent_profit"].min(),1)
+
+    return print(f"{prob_of_losing}% chance of losing. Average loss {average_loss}% and max loss {max_loss}%")

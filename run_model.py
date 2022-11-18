@@ -48,7 +48,7 @@ raw_prices["High"].max()
 init_balance = 20000
 max_exposure = 0.5
 global_end_loss = True
-global_overnight_rate = 0.065 / 365
+global_overnight_rate = 0.065 / 365 * 14
 
 # =============================================================================
 # initial_buy_prices = list(np.linspace(10, 30, 8))
@@ -138,7 +138,7 @@ results["profit"] = calculate_profit_vector(train_data,
 
 print("--- %s seconds ---" % (time.time() - start_time))
 
-results.sort_values("profit", ascending = False)
+print(results.sort_values("profit", ascending = False))
 
 results["max_profit"] = results["profit"].max()
 # Work out the range within 5%
@@ -172,7 +172,7 @@ results["profit"] = calculate_profit_vector(train_data,
 
 print("--- %s seconds ---" % (time.time() - start_time))
 
-results.sort_values("profit", ascending = False)
+print(results.sort_values("profit", ascending = False))
 
 results["max_profit"] = results["profit"].max()
 # Work out the range within 5%
@@ -188,23 +188,77 @@ print(best_results2["Sell"].max())
 
 ##########################################
 
+calculate_profit_yearly(test_data, [16.1], [28.3], max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+
 # Test the model with a monte carlo
 
 one_year_monte_carlo = monte_carlo_test_runs(data = test_data,
                                              n_iterations = 1000,
                                              n_years = 1,
-                                             buy_prices = [21.1], 
-                                             sell_prices = [23.9], 
+                                             buy_prices = [16.1], 
+                                             sell_prices = [28.3], 
                                              max_exposure = max_exposure, 
                                              initial_balance = init_balance, 
                                              end_loss = True, 
                                              overnight_rate = global_overnight_rate)
 
-one_year_monte_carlo["Percent_profit"] = one_year_monte_carlo["Profit"] / init_balance * 100
-
 # Plot the results
 one_year_monte_carlo["Percent_profit"].plot.hist(grid = True,
                                                  bins = 20)
+
+loser_info(one_year_monte_carlo)
+
+
+##########################################
+
+# Test combo of models
+
+calculate_profit_yearly(test_data, 11.6, 21.1, max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+
+one_year_monte_carlo_combo = monte_carlo_test_runs(data = test_data,
+                                                 n_iterations = 1000,
+                                                 n_years = 1,
+                                                 buy_prices = [11.6, 21.1], 
+                                                 sell_prices = [13.9, 23.9], 
+                                                 max_exposure = max_exposure, 
+                                                 initial_balance = init_balance, 
+                                                 end_loss = True, 
+                                                 overnight_rate = global_overnight_rate
+                                                 ).groupby("mc_run").sum()
+
+
+# Plot the results
+one_year_monte_carlo_combo["Percent_profit"].plot.hist(grid = True, bins = 20)
+
+loser_info(one_year_monte_carlo_combo)
+
+##########################################
+
+calculate_profit_yearly(test_data, 
+                        [11.6, 21.1], 
+                        [13.9, 23.9], 
+                        max_exposure = max_exposure, 
+                        initial_balance = init_balance, 
+                        end_loss = True, 
+                        overnight_rate = global_overnight_rate)
+
+two_year_monte_carlo_combo = monte_carlo_test_runs(data = test_data,
+                                                 n_iterations = 1000,
+                                                 n_years = 2,
+                                                 buy_prices = [11.6, 21.1], 
+                                                 sell_prices = [13.9, 23.9], 
+                                                 max_exposure = max_exposure, 
+                                                 initial_balance = init_balance, 
+                                                 end_loss = True, 
+                                                 overnight_rate = global_overnight_rate
+                                                 ).groupby("mc_run").sum()
+
+# Plot the results
+two_year_monte_carlo_combo["Percent_profit"].plot.hist(grid = True, bins = 20)
+
+loser_info(two_year_monte_carlo_combo)
+
+
 
 
 
