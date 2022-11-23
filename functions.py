@@ -106,23 +106,21 @@ def calculate_profit(data,
 def calculate_profit_vector(data, 
                              buy_prices, 
                              sell_prices, 
+                             stop_losses,
                              max_exposure = 1, 
                              initial_balance = 1e4, 
-                             end_loss = False, 
-                             overnight_rate = (0.025 / 365),
+                             end_loss = False,
                              daily_balances = False):
  
-# =============================================================================
-#     # For debugging
-#     data = data_subset
-#     buy_prices = results["Buy"]
-#     sell_prices = results["Sell"]
-#     max_exposure = 0.5
-#     initial_balance = 10000
-#     end_loss = False
-#     overnight_rate = (0.065 / 365)
-#     daily_balances = True
-# =============================================================================
+    # For debugging
+    data = train_data
+    buy_prices = results["Buy"]
+    sell_prices = results["Sell"]
+    stop_losses = results["Stop"]
+    max_exposure = 0.5
+    initial_balance = 10000
+    end_loss = False
+    daily_balances = True
     
     # To avoid errors, reset the index
     data = data.reset_index(drop = True)
@@ -130,10 +128,12 @@ def calculate_profit_vector(data,
     # Initial variables
     results_data = pl.DataFrame({"buy_price": np.array(buy_prices, dtype = float),
                                  "sell_price": np.array(sell_prices, dtype = float),
+                                 "stop_loss": np.array(stop_losses, dtype = float),
                                  "bet_per_pt": np.array([0] * len(buy_prices), dtype = float),
                                  "balance": np.array([initial_balance] * len(buy_prices), dtype = float)})
        
     results_data = results_data.with_column((pl.col("sell_price") - pl.col("buy_price") - 0.15).alias("buy_sell_diff")) # includes the spread paid deducted
+    results_data = results_data.with_column((pl.col("stop_loss") - pl.col("buy_price") - 0.15).alias("stop_loss_diff"))
     
     daily_balance_data = pl.DataFrame({"Date": ["1900-01-01"],
                                        "High": [0.1],
@@ -150,15 +150,26 @@ def calculate_profit_vector(data,
         # Calculate overnight costs
         results_data = results_data.with_column((pl.col("bet_per_pt") * 
                                                  pl.lit((data["Date_ft"][i] - data["Date_ft"][i - 1]).days) * 
-                                                 pl.lit(data["Open"][i]) *
-                                                 pl.lit(overnight_rate)
+                                                 pl.lit(data["overnight_cost_per_pt"][i])
                                                 ).alias("overnight_costs"))
                                                 
         # Update balances with costs
         results_data = results_data.with_column((pl.col("balance") - pl.col("overnight_costs")).alias("balance"))
         
+        # Check if we hit a stop loss during the day
+        results_data = results_data.with_column((pl.col("stop_loss") >= pl.lit(data["Low"][i])
+                                                 ).alias("stopped_ind"))
+        
+        # Sell out holding for those where it's true
+        results_data = results_data.with_column((pl.col("balance") + 
+                                                 (pl.col("stop_loss_diff") *
+                                                  pl.col("bet_per_pt") *
+                                                  pl.col("stopped_ind"))
+                                                 ).alias("balance"))
+        
         # Check if we've hit a selling opportunity in the day
-        results_data = results_data.with_column(((pl.col("bet_per_pt") > 0) &
+        results_data = results_data.with_column(((~pl.col("stopped_ind")) &
+                                                 (pl.col("bet_per_pt") > 0) &
                                                  (pl.col("sell_price") < pl.lit(data["High"][i]))
                                                  ).alias("sell_ind"))
         
@@ -224,10 +235,10 @@ def calculate_profit_vector(data,
 def calculate_profit_yearly(data, 
                             buy_prices, # a list of values
                             sell_prices, 
+                            stop_losses,
                             max_exposure, 
                             initial_balance, 
-                            end_loss = False, 
-                            overnight_rate = (0.025 / 365)):
+                            end_loss = False):
 
 # =============================================================================
 #     # For debugging
@@ -243,10 +254,10 @@ def calculate_profit_yearly(data,
     daily_data = calculate_profit_vector(data, 
                                         pd.Series(buy_prices), # input as a Series
                                         pd.Series(sell_prices), 
+                                        pd.Series(stop_losses),
                                         max_exposure = max_exposure, 
                                         initial_balance = initial_balance / len(buy_prices), 
-                                        end_loss = end_loss, 
-                                        overnight_rate = overnight_rate,
+                                        end_loss = end_loss,
                                         daily_balances = True).to_pandas()
     
     # Split the date column

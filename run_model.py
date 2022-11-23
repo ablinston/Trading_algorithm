@@ -13,7 +13,7 @@ import polars as pl
 
 # Read in data
 
-raw_prices = pd.read_csv("C:/Users/Andy/Documents/Trading_algorithm/^VIX.csv")
+raw_prices = pd.read_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/Processed_data.csv")
 
 # Remove data where we don't have high and low
 raw_prices = raw_prices[raw_prices.High != raw_prices.Low]
@@ -48,7 +48,6 @@ raw_prices["High"].max()
 init_balance = 20000
 max_exposure = 0.5
 global_end_loss = True
-global_overnight_rate = 0.065 / 365 * 14
 
 # =============================================================================
 # initial_buy_prices = list(np.linspace(10, 30, 8))
@@ -57,8 +56,8 @@ global_overnight_rate = 0.065 / 365 * 14
 
 # len(initial_buy_prices) * len(initial_sell_prices)
 
-train_data = raw_prices[raw_prices["Year"] < 2008].reset_index(drop = True)
-test_data = raw_prices[raw_prices["Year"] >= 2010].reset_index(drop = True)
+train_data = raw_prices[raw_prices["Year"] < 2017].reset_index(drop = True)
+test_data = raw_prices[raw_prices["Year"] >= 2017].reset_index(drop = True)
 
 # =============================================================================
 # 
@@ -120,21 +119,26 @@ test_data = raw_prices[raw_prices["Year"] >= 2010].reset_index(drop = True)
 start_time = time.time()
 
 # Vectorised
-initial_buy_prices = list(np.linspace(10, 40, 300))
-initial_sell_prices = list(np.linspace(20, 50, 300))
+initial_buy_prices = list(np.linspace(10, 40, 100))
+initial_sell_prices = list(np.linspace(20, 50, 100))
+initial_stop_losses = list(np.linspace(0, 40, 100))
 
-results = pd.DataFrame(list(product(initial_buy_prices, initial_sell_prices)),
-                       columns = ["Buy", "Sell"])
+results = pd.DataFrame(list(product(initial_buy_prices, 
+                                    initial_sell_prices,
+                                    initial_stop_losses)),
+                       columns = ["Buy", "Sell", "Stop"])
+
 # Remove where buy > sell
 results = results[results.Sell > (results.Buy + 0.15)] # spread added
+results = results[results.Buy > (results.Stop + 0.15)] # spread added
 
 results["profit"] = calculate_profit_vector(train_data,
                                               results["Buy"],
                                               results["Sell"],
+                                              results["Stop"],
                                               max_exposure = max_exposure,
                                               initial_balance = init_balance,
-                                              end_loss = global_end_loss,
-                                              overnight_rate = global_overnight_rate)
+                                              end_loss = global_end_loss)
 
 print("--- %s seconds ---" % (time.time() - start_time))
 
@@ -142,12 +146,14 @@ print(results.sort_values("profit", ascending = False))
 
 results["max_profit"] = results["profit"].max()
 # Work out the range within 5%
-best_results = results[results.profit > 0.95 * results.max_profit]
+best_results = results[results.profit > 0.90 * results.max_profit]
 
 print(best_results["Buy"].min())
 print(best_results["Buy"].max())
 print(best_results["Sell"].min())
 print(best_results["Sell"].max())
+print(best_results["Stop"].min())
+print(best_results["Stop"].max())
 
 ##########################################
 
@@ -167,8 +173,7 @@ results["profit"] = calculate_profit_vector(train_data,
                                               results["Sell"],
                                               max_exposure = max_exposure,
                                               initial_balance = init_balance,
-                                              end_loss = global_end_loss,
-                                              overnight_rate = global_overnight_rate)
+                                              end_loss = global_end_loss)
 
 print("--- %s seconds ---" % (time.time() - start_time))
 
@@ -188,7 +193,7 @@ print(best_results2["Sell"].max())
 
 ##########################################
 
-calculate_profit_yearly(test_data, [16.1], [28.3], max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss, overnight_rate = global_overnight_rate)
+calculate_profit_yearly(test_data, [13.8], [20],[12], max_exposure = max_exposure, initial_balance = init_balance, end_loss = global_end_loss)
 
 # Test the model with a monte carlo
 

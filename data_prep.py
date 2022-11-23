@@ -143,4 +143,5 @@ raw_prices_with_futures["projected_overnight_cost_per_pt"] = ((raw_prices_with_f
                                                     raw_prices_with_futures["Next_future_close"]) / 31 +
                                                     (0.025 / 365 * raw_prices_with_futures["Close"]))
 
-raw_prices_with_futures.to_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/Processed_data.csv")
+raw_prices_with_futures.to_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/Processed_data.csv",
+                               index=False)
