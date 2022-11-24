@@ -10,33 +10,20 @@ from datetime import datetime
 from itertools import product
 import polars as pl
 
+os.chdir("C:/Users/Andy/Documents/VIX_trading_algorithm")
 
 # Read in data
 
-raw_prices = pd.read_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/Processed_data.csv")
+raw_prices = pd.read_feather("Processed_data.feather")
 
-# Remove data where we don't have high and low
-raw_prices = raw_prices[raw_prices.High != raw_prices.Low]
-
-# Change format of the date column
-raw_prices[["Year", "Month", "Day"]] = raw_prices["Date"].str.split("-", expand = True)
-raw_prices["Year"] = pd.to_numeric(raw_prices["Year"])
-raw_prices["Month"] = pd.to_numeric(raw_prices["Month"])
-
-raw_prices.head()
-raw_prices["Date_ft"] = raw_prices["Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
 
 # Convert to a polars data frame for speed
 #raw_prices = pl.DataFrame(raw_prices)
 
-prices_by_month_year = raw_prices.groupby(by = ["Year", "Month"]).mean()
+prices_by_month_year = raw_prices.groupby(by = ["Year", "Month"]).mean(numeric_only = True)
 prices_by_month_year.head()
 
 #plt.plot(list(prices_by_month_year["Open"]))
-
-
-# Initial exploratory analysis
-len(raw_prices.index)
 
 raw_prices["Low"].min()
 raw_prices["High"].max()

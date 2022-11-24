@@ -1,6 +1,9 @@
 import pandas as pd
 import glob
 from datetime import datetime, date, timedelta
+import os
+
+os.chdir("C:/Users/Andy/Documents/VIX_trading_algorithm")
 
 data = pd.DataFrame(columns=["Trade Date",
                              "Futures",
@@ -16,7 +19,7 @@ data = pd.DataFrame(columns=["Trade Date",
                              "Expiry Date"])
 
 # Loop through the directories and merge all the data together
-for file_name in glob.glob("C:/Users/Andy/Documents/VIX_trading_algorithm/VIX futures data/2010s/" + "*.csv"):
+for file_name in glob.glob("2010s/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -30,7 +33,7 @@ for file_name in glob.glob("C:/Users/Andy/Documents/VIX_trading_algorithm/VIX fu
     data = pd.concat([data, temp], axis = 0)
     del(temp)
 
-for file_name in glob.glob("C:/Users/Andy/Documents/VIX_trading_algorithm/VIX futures data/2020s/" + "*.csv"):
+for file_name in glob.glob("2020s/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -44,7 +47,7 @@ for file_name in glob.glob("C:/Users/Andy/Documents/VIX_trading_algorithm/VIX fu
     data = pd.concat([data, temp], axis = 0)
     del(temp)
     
-for file_name in glob.glob("C:/Users/Andy/Documents/VIX_trading_algorithm/VIX futures data/Archived/" + "*.csv"):
+for file_name in glob.glob("Archived/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -100,7 +103,7 @@ date_lookup.head()
 
 # Read in VIX ticker info
 
-raw_prices = pd.read_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/^VIX.csv")
+raw_prices = pd.read_csv("^VIX.csv")
 
 # Remove data where we don't have high and low
 raw_prices = raw_prices[raw_prices.High != raw_prices.Low]
@@ -143,5 +146,7 @@ raw_prices_with_futures["projected_overnight_cost_per_pt"] = ((raw_prices_with_f
                                                     raw_prices_with_futures["Next_future_close"]) / 31 +
                                                     (0.025 / 365 * raw_prices_with_futures["Close"]))
 
-raw_prices_with_futures.to_csv("C:/Users/Andy/Documents/VIX_trading_algorithm/Processed_data.csv",
-                               index=False)
+# Remove data where we don't have high and low
+raw_prices_with_futures = raw_prices_with_futures[raw_prices.High != raw_prices.Low]
+
+raw_prices_with_futures.to_feather("Processed_data.feather")
