@@ -18,8 +18,10 @@ data = pd.DataFrame(columns=["Trade Date",
                              "Open Interest",
                              "Expiry Date"])
 
+expiry_dates = pd.read_csv("VIX futures data/expiry_dates.csv")[["filename", "Expiry Date"]]
+
 # Loop through the directories and merge all the data together
-for file_name in glob.glob("2010s/" + "*.csv"):
+for file_name in glob.glob("VIX futures data/2010s/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -33,7 +35,7 @@ for file_name in glob.glob("2010s/" + "*.csv"):
     data = pd.concat([data, temp], axis = 0)
     del(temp)
 
-for file_name in glob.glob("2020s/" + "*.csv"):
+for file_name in glob.glob("VIX futures data/2020s/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -47,7 +49,7 @@ for file_name in glob.glob("2020s/" + "*.csv"):
     data = pd.concat([data, temp], axis = 0)
     del(temp)
     
-for file_name in glob.glob("Archived/" + "*.csv"):
+for file_name in glob.glob("VIX futures data/Archived/" + "*.csv"):
     
     temp = pd.read_csv(file_name)
     
@@ -57,6 +59,28 @@ for file_name in glob.glob("Archived/" + "*.csv"):
     # Add the expiry date as a date
     temp["Expiry Date"] = temp["Trade Date"].max()
     
+    # Add to dataset
+    data = pd.concat([data, temp], axis = 0)
+    del(temp)
+
+# For incomplete data, we need to manually get the expiry date
+for file_name in glob.glob("VIX futures data/Incomplete/" + "*.csv"):
+    
+    temp = pd.read_csv(file_name)
+    
+    # Format the date column
+    temp["Trade Date"] = temp["Trade Date"].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
+    temp["filename"] = file_name[-6:-5]
+    
+    # Find the expiry date
+    temp = pd.merge(temp,
+                    expiry_dates,
+                    on = "filename").drop("filename", axis = 1)
+    
+    
+    # Add the expiry date as a date
+    temp["Expiry Date"] = temp["Expiry Date"].apply(lambda x: datetime.strptime(x, "%d/%m/%Y")  )
+                                                    
     # Add to dataset
     data = pd.concat([data, temp], axis = 0)
     del(temp)
@@ -99,7 +123,7 @@ for day in range(0, (all_futures.max() - start_date).days):
                                           index = [0])],
                             axis = 0)
 
-date_lookup.head()
+date_lookup.tail()
 
 # Read in VIX ticker info
 
@@ -147,6 +171,9 @@ raw_prices_with_futures["projected_overnight_cost_per_pt"] = ((raw_prices_with_f
                                                     (0.025 / 365 * raw_prices_with_futures["Close"]))
 
 # Remove data where we don't have high and low
-raw_prices_with_futures = raw_prices_with_futures[raw_prices.High != raw_prices.Low]
+raw_prices_with_futures = raw_prices_with_futures[raw_prices_with_futures.High != raw_prices_with_futures.Low]
 
 raw_prices_with_futures.to_feather("Processed_data.feather")
+
+
+raw_prices_with_futures["check"] = 393.1 * raw_prices_with_futures["overnight_cost_per_pt"]
