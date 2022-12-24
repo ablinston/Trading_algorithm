@@ -115,14 +115,16 @@ def calculate_profit_vector(data,
                              daily_balances = False):
  
     # For debugging
-    data = train_data
-    buy_prices = results["Buy"]
-    sell_prices = results["Sell"]
-    stop_losses = results["Stop"]
-    max_exposure = 0.5
-    initial_balance = 10000
-    end_loss = False
-    daily_balances = False
+# =============================================================================
+#     data = train_data
+#     buy_prices = results["Buy"]
+#     sell_prices = results["Sell"]
+#     stop_losses = results["Stop"]
+#     max_exposure = 0.5
+#     initial_balance = 10000
+#     end_loss = False
+#     daily_balances = False
+# =============================================================================
     
     # To avoid errors, reset the index
     data = data.reset_index(drop = True)
