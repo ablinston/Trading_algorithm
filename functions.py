@@ -115,16 +115,14 @@ def calculate_profit_vector(data,
                              daily_balances = False):
  
     # For debugging
-# =============================================================================
-#     data = train_data
-#     buy_prices = results["Buy"]
-#     sell_prices = results["Sell"]
-#     stop_losses = results["Stop"]
-#     max_exposure = 0.5
-#     initial_balance = 10000
-#     end_loss = False
-#     daily_balances = False
-# =============================================================================
+    data = train_data
+    buy_prices = results["Buy"]
+    sell_prices = results["Sell"]
+    stop_losses = results["Stop"]
+    max_exposure = 0.5
+    initial_balance = 10000
+    end_loss = False
+    daily_balances = False
     
     # To avoid errors, reset the index
     data = data.reset_index(drop = True)
@@ -136,11 +134,10 @@ def calculate_profit_vector(data,
                                  "bet_per_pt": np.array([0] * len(buy_prices), dtype = float),
                                  "balance": np.array([initial_balance] * len(buy_prices), dtype = float),
                                  "trades_won": np.array([0] * len(buy_prices), dtype = float),
-                                 "trades_lost": np.array([0] * len(buy_prices), dtype = float)})
-       
-    results_data = results_data.with_column((pl.col("sell_price") - pl.col("buy_price") - 0.15).alias("buy_sell_diff")) # includes the spread paid deducted
-    results_data = results_data.with_column((pl.col("stop_loss") - pl.col("buy_price") - 0.15).alias("stop_loss_diff"))
-    
+                                 "trades_lost": np.array([0] * len(buy_prices), dtype = float),
+                                 "act_buy_price": np.array(buy_prices, dtype = float),
+                                 "buy_ind": np.array([False] * len(buy_prices), dtype = bool)})
+           
     daily_balance_data = pl.DataFrame({"Date": ["1900-01-01"],
                                        "High": [0.1],
                                        "Low": [0.1],
@@ -154,6 +151,10 @@ def calculate_profit_vector(data,
     
     # Loop through each day
     for i in range(1, (len(data.index) - 1)):
+       
+        # Calculate the differences for each trade
+        results_data = results_data.with_column((pl.col("sell_price") - pl.col("act_buy_price") - 0.15).alias("buy_sell_diff")) # includes the spread paid deducted
+        results_data = results_data.with_column((pl.col("stop_loss") - pl.col("act_buy_price") - 0.15).alias("stop_loss_diff")) 
        
         # Calculate overnight costs
         results_data = results_data.with_column((pl.col("bet_per_pt") * 
@@ -203,10 +204,24 @@ def calculate_profit_vector(data,
                                                  ).alias("trades_lost"))
                         
         # Check if we've hit a day for buying before reseting bet (so we don't buy and sell on same day)
-        results_data = results_data.with_column(((pl.col("bet_per_pt") == pl.lit(0)) &
-                                                 (pl.col("buy_price") < pl.lit(data["High"][i])) &
-                                                 (pl.col("buy_price") > pl.lit(data["Low"][i])))
-                                                .alias("buy_ind"))
+        # This uses the buy_ind from the previous day and checks
+        
+        # Work out the size of bet available                
+        # Now bet on the shares where appropriate
+        results_data = results_data.with_column((pl.when(pl.col("buy_ind") &
+                                                         (pl.lit(data["Open"][i]) > pl.col("buy_price")))
+                                                 .then(pl.col("balance") *
+                                                       pl.lit(max_exposure) /
+                                                       pl.lit(data["Open"][i]))
+                                                 .otherwise(pl.col("bet_per_pt")))
+                                                .alias("bet_per_pt"))
+        
+        # Record the actual buy price which is the market open
+        results_data = results_data.with_column((pl.when(pl.col("buy_ind") &
+                                                         (pl.lit(data["Open"][i]) >= pl.col("buy_price")))
+                                                 .then(pl.lit(data["Open"][i]))
+                                                 .otherwise(pl.col("act_buy_price")))
+                                                .alias("act_buy_price"))
         
         # Set the bet to 0 if sell indicator flagged
         results_data = results_data.with_column((pl.when(pl.col("sell_ind") | pl.col("stopped_ind")).
@@ -214,24 +229,21 @@ def calculate_profit_vector(data,
                                                  otherwise(pl.col("bet_per_pt")))
                                                  .alias("bet_per_pt"))
         
-        # Work out the size of bet available                
-        # Now bet on the shares where appropriate
-        results_data = results_data.with_column((pl.when(pl.col("buy_ind"))
-                                                 .then(pl.col("balance") *
-                                                       pl.lit(max_exposure) /
-                                                       pl.col("buy_price"))
-                                                 .otherwise(pl.col("bet_per_pt")))
-                                                .alias("bet_per_pt"))
+        # Work out if we might hit a buy situation tomorrow
+        results_data = results_data.with_column(((pl.col("bet_per_pt") == pl.lit(0)) &
+                                                 (pl.col("buy_price") < pl.lit(data["High"][i])) &
+                                                 (pl.col("buy_price") > pl.lit(data["Low"][i])))
+                                                .alias("buy_ind"))
         
         # Check whether the trade gets stopped out at the end of the day
         # Check if we hit a stop loss during the day
-        results_data = results_data.with_column(((pl.col("stop_loss") >= pl.lit(data["Close"][i])) & 
+        results_data = results_data.with_column(((pl.col("stop_loss") >= pl.lit(data["Low"][i])) & 
                                                   (pl.col("bet_per_pt") > pl.lit(0))
                                                  ).alias("stopped_ind"))
         
         # Sell out holding for those where it's true
         results_data = results_data.with_column((pl.col("balance") + 
-                                                 ((pl.lit(data["Close"][i]) - pl.col("buy_price") - 0.15) *
+                                                 ((pl.col("stop_loss") - pl.col("act_buy_price") - 0.15) *
                                                   pl.col("bet_per_pt") *
                                                   pl.col("stopped_ind"))
                                                  ).alias("balance"))

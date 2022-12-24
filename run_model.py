@@ -109,9 +109,9 @@ test_data = raw_prices[raw_prices["Year"] >= 2017].reset_index(drop = True)
 start_time = time.time()
 
 # Vectorised
-initial_buy_prices = list(np.linspace(10, 40, 100))
+initial_buy_prices = list(np.linspace(10, 40, 200))
 initial_sell_prices = list(np.linspace(20, 80, 100))
-initial_stop_losses = list(np.linspace(0, 40, 100))
+initial_stop_losses = list(np.linspace(0, 40, 200))
 
 results = pd.DataFrame(list(product(initial_buy_prices, 
                                     initial_sell_prices,
